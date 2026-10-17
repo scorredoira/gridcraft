@@ -147,14 +147,9 @@ fn open_plain(name: &str, bytes: &[u8]) -> Result<(Workbook, Vec<String>)> {
     // exports as HTML named `.xls`, and Excel opens them. Other text files (`.csv`, `.txt`) are
     // read as text whatever they hold.
     if matches!(kind, Some(FileKind::Xls | FileKind::Html)) && gridcraft_xlsx::is_html(bytes) {
-        let (mut wb, mut warnings) = gridcraft_xlsx::read_html(bytes)
-            .map(|(wb, r)| (wb, r.warnings))
-            .map_err(|e| EngineError::Other(format!("We can't open '{name}': {e}")))?;
-        if kind == Some(FileKind::Xls) {
-            warnings.insert(0, format!("'{name}' is a web page (HTML), not an Excel workbook: its tables were opened as a sheet."));
-        }
+        let (mut wb, report) = gridcraft_xlsx::read_html(bytes).map_err(|e| EngineError::Other(format!("We can't open '{name}': {e}")))?;
         rename_first_sheet(&mut wb, name);
-        return Ok((wb, warnings));
+        return Ok((wb, report.warnings));
     }
     match kind {
         Some(FileKind::Json) => {
@@ -747,11 +742,7 @@ mod tests {
             assert_eq!(sh.name, "Movimientos", "{name}");
             assert_eq!(sh.value(CellRef::new(0, 0)), gridcraft_core::Value::text("Importe"), "{name}");
             assert_eq!(sh.value(CellRef::new(1, 0)), gridcraft_core::Value::Number(-17.35), "{name}");
-            assert_eq!(
-                warnings.iter().any(|w| w.contains("is a web page")),
-                !name.ends_with("htm") && !name.ends_with("html"),
-                "{name}: {warnings:?}"
-            );
+            assert!(warnings.is_empty(), "{name}: {warnings:?}");
         }
         // Text files are read as text, whatever they hold.
         for name in ["Movimientos.csv", "Movimientos.txt"] {
